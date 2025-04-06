@@ -70,7 +70,7 @@ exports.saveFlowChart = async (req, res, next) => {
 
         for (let item of emailSequence) {
          // const runAt = new Date(Date.now() + item.delay * 60 * 60 * 1000); // delay in hours
-          const runAt = new Date(Date.now() + item.delay * 60 * 1000); // delay in hours
+          const runAt = new Date(Date.now() + item.delay * 60 * 1000); // delay in minutes for testing purpose
           await agenda.schedule(runAt, 'send-email', item.data);
         }
     
