@@ -11,12 +11,13 @@ require('./jobs/emailJobs.js');
 
 const app = express();
 
-
+// Allowlist of frontend domains for CORS
 const allowedOrigins = [
     'http://localhost:3000',
     'https://email-flow-front-end.vercel.app',
-  ];
+];
 
+// CORS setup to handle cross-origin requests securely
 app.use(
     cors({
       origin: allowedOrigins, 
@@ -26,26 +27,11 @@ app.use(
     })
 );
 
-
-
-// app.use((req, res, next) => {
-//     res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
-//     res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
-//     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    
-//     res.header("Access-Control-Allow-Origin", "http://localhost:3000");
-//     res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-//     res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-
-//     if (req.method === "OPTIONS") {
-//         return res.sendStatus(200);
-//     }
-//     next();
-// });
-
+// Parse incoming JSON and form-encoded requests
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Route setup
 app.use("/auth", authRoutes);
 app.use('/emailFlow', emailFlowRoutes)
 
@@ -63,7 +49,7 @@ app.use((error, req, res, next) => {
     });
 });
 
-
+// Connect to MongoDB and start server once connected
 mongoose.connect(process.env.MONGO_URI)
 .then(result => {
     app.listen(port, () => { 

@@ -5,21 +5,24 @@ const {body} = require('express-validator');
 const AuthController = require('../controllers/authController');
 const User = require( '../models/User.js' );
 
+// Route for Google OAuth login
 router.post('/google', AuthController.googleSignIn);
 
+// Route for email/password signup with validations
 router.post('/signup', [
     body('email')
         .isEmail()
         .withMessage('Please enter a valid email.')
-        .normalizeEmail(),
+        .normalizeEmail(),  // Sanitize email input
     body('password')
-        .trim(),
+        .trim(),    // Remove whitespace from start and end
     body('name')
         .trim()
         .not()
         .isEmpty()
 ], AuthController.signup)
 
+// Route for login with validations
 router.post('/login', [
     body('email')
         .isEmail()
