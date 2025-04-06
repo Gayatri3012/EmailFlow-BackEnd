@@ -78,6 +78,7 @@ EMAIL_USER=your_email@gmail.com
 EMAIL_PASS=your_email_password
 ```
 ℹ️ Note: Currently using a test account from Nodemailer for sending emails. Replace with your SMTP credentials before deploying to production.
+
 ---
 
 ## 🔐 Authentication & OAuth
