@@ -1,14 +1,95 @@
 const Flowchart = require( '../models/Flowchart' );
 const agenda = require('../config/agenda.js');
+const { GoogleGenerativeAI } = require( '@google/generative-ai' );
 require('../jobs/emailJobs.js');
 
+const apiKey = process.env.GEMINI_API_KEY;
+
+const genAI = new GoogleGenerativeAI(apiKey);
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
+
+//Controller to generate a general AI response using genAI
+exports.handleGenerateAIResponse = async (req, res) => {
+
+  if (req.method !== "POST") return res.status(405).end();
+
+  const { prompt } = req.body;
+
+  try {
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response; 
+
+    const text = response.text();
+
+    if (!text) {
+      console.error("Invalid Gemini Response:", data);
+      return res.status(500).json({ error: "Failed to get content from Gemini response" });
+    }
+
+    const rawText = text.split('\n').filter(Boolean);
+    res.status(200).json({
+      response : rawText
+    });
+  } catch (error) {
+    console.error("Gemini API error:", error.response?.data || error.message);
+    res.status(500).json({ error: "AI generation failed" });
+  }
+}
+
+
+// Controller to generate an email using genAI
+exports.handleGenerateEmail = async (req, res) => {
+
+  if (req.method !== "POST") return res.status(405).end();
+
+  const { category, prompt } = req.body;
+
+  let finalPrompt = "";
+
+  if (prompt) {
+    finalPrompt = `Write a professional cold email. ${prompt}`;
+  } else if (category) {
+    finalPrompt = `Write a professional cold email for the category "${category}". Include a subject line and a short body.`;
+  } else {
+    return res.status(400).json({ error: "No prompt or category provided" });
+  }
+
+  try {
+  
+
+    const result = await model.generateContent(finalPrompt);
+    const response = await result.response; // Await the promise
+
+    const text = response.text();
+
+    if (!text) {
+      console.error("Invalid Gemini Response:", data);
+      return res.status(500).json({ error: "Failed to get content from Gemini response" });
+    }
+
+    // Extract subject and body using simple logic
+    const rawText = text.split('\n').filter(Boolean);
+    const subject = rawText[0].replace(/^Subject:\s*/i, '').trim();
+    const body = rawText.slice(1).join('\n').trim();
+
+  
+    res.status(200).json({
+      subject,
+      body,
+    });
+  } catch (error) {
+    console.error("Gemini API error:", error.response?.data || error.message);
+    res.status(500).json({ error: "AI generation failed" });
+  }
+}
 
 // Controller for saving or updating a flowchart and scheduling the email sequence
 exports.saveFlowChart = async (req, res, next) => {
     const { token } = req.body;
 
     try {
-        const { nodes, edges, userId, title,flowchartId } = req.body;
+        const { option, nodes, edges, userId, title,flowchartId } = req.body;
         let savedFlowchart;
 
         // Update existing flowchart if flowchartId is provided
@@ -22,6 +103,7 @@ exports.saveFlowChart = async (req, res, next) => {
           existingFlowchart.edges = edges;
           existingFlowchart.title = title;
           existingFlowchart.updatedAt = new Date();
+          existingFlowchart.status = option === 'saveAndSchedule' ? 'scheduled' : 'saved';
           savedFlowchart = await existingFlowchart.save();
 
         } else {
@@ -30,62 +112,71 @@ exports.saveFlowChart = async (req, res, next) => {
               nodes,
               edges,
               title,
-              userId
+              userId,
+              status: option === 'saveAndSchedule' ? 'scheduled' : 'saved',
           });
 
           savedFlowchart = await newFlowchart.save();
         }
 
-        // Create a map of nodes for quick lookup by ID
-        const nodeMap = {};
-        nodes.forEach((node) => {
-          nodeMap[node.id] = node;
-        });
-    
-        // Find the starting point of the flow (Lead Source node)
-        const startNode = nodes.find((n) => n.type === 'leadSource');
-        if (!startNode) {
-          return res.status(400).json({ message: "No lead source node found" });
-        }
-
-        // Recursively build the email sequence starting from the lead node
-        const buildSequence = (currentNodeId, accumulatedDelay = 0, sequence = []) => {
-          const currentNode = nodeMap[currentNodeId];
-          if (!currentNode) return sequence;
-    
-          if (currentNode.type === 'coldEmail') {
-            sequence.push({
-              action: 'sendEmail',
-              delay: accumulatedDelay,
-              data: currentNode.data,
-            });
+        //Only schedule if user chose 'saveAndSchedule'
+        if(option === 'saveAndSchedule'){
+          // Create a map of nodes for quick lookup by ID
+          const nodeMap = {};
+          nodes.forEach((node) => {
+            nodeMap[node.id] = node;
+          });
+      
+          // Find the starting point of the flow (Lead Source node)
+          const startNode = nodes.find((n) => n.type === 'leadSource');
+          if (!startNode) {
+            return res.status(400).json({ message: "No lead source node found" });
           }
-          if (currentNode.type === 'delay') {
-            const hours = Number(currentNode.data?.delayTime) || 0;
-            accumulatedDelay += hours;
-          }
-    
-          // Find the next connected node
-          const nextEdge = edges.find((edge) => edge.source === currentNodeId);
-          if (nextEdge) {
-            return buildSequence(nextEdge.target, accumulatedDelay, sequence);
-          }
-    
-          return sequence;
-        }
 
-        const emailSequence = buildSequence(startNode.id);
+          // Recursively build the email sequence starting from the lead node
+          const buildSequence = (currentNodeId, accumulatedDelay = 0, sequence = []) => {
+            const currentNode = nodeMap[currentNodeId];
+            if (!currentNode) return sequence;
+      
+            if (currentNode.type === 'coldEmail') {
+              sequence.push({
+                action: 'sendEmail',
+                delay: accumulatedDelay,
+                data: currentNode.data,
+              });
+            }
+            if (currentNode.type === 'delay') {
+              const hours = Number(currentNode.data?.delayTime) || 0;
+              accumulatedDelay += hours;
+            }
+      
+            // Find the next connected node
+            const nextEdge = edges.find((edge) => edge.source === currentNodeId);
+            if (nextEdge) {
+              return buildSequence(nextEdge.target, accumulatedDelay, sequence);
+            }
+      
+            return sequence;
+          }
 
-        // Schedule each email in the sequence using Agenda
-        for (let item of emailSequence) {
-         // const runAt = new Date(Date.now() + item.delay * 60 * 60 * 1000); // delay in hours
-          const runAt = new Date(Date.now() + item.delay * 60 * 1000); // delay in minutes for testing purpose
-          await agenda.schedule(runAt, 'send-email', item.data);
+          const emailSequence = buildSequence(startNode.id);
+
+          // Schedule each email in the sequence using Agenda
+          for (let item of emailSequence) {
+          // const runAt = new Date(Date.now() + item.delay * 60 * 60 * 1000); // delay in hours
+            const runAt = new Date(Date.now() + item.delay * 60 * 1000); // delay in minutes for testing purpose
+            await agenda.schedule(runAt, 'send-email', item.data);
+          }
         }
+      
     
         // Send response based on whether it was an update or a new flowchart
         return res.status(flowchartId ? 200 : 201).json({
-          message: flowchartId ? "Flowchart updated successfully" : "Flowchart saved!",
+          message:  option === "saveAndSchedule"
+          ? "Flowchart scheduled and saved!"
+          : flowchartId
+          ? "Flowchart updated successfully"
+          : "Flowchart saved!",
           id: savedFlowchart._id,
         });
       } catch (error) {

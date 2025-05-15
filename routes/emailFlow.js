@@ -13,4 +13,11 @@ router.get('/flowcharts/:userId', isAuth, EmailFlowController.getAllFlowCharts);
 // Get a single flowchart by its ID (protected route)
 router.get('/flowchart/:flowchartId', isAuth, EmailFlowController.getFlowChartById)
 
+// Generate an email using genAI (protected route)
+router.post('/generate-email', isAuth, EmailFlowController.handleGenerateEmail);
+
+// Generate a general AI response using genAI (protected route)
+router.post('/generate-airesponse', isAuth, EmailFlowController.handleGenerateAIResponse);
+
+
 module.exports = router;

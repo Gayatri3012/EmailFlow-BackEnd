@@ -5,6 +5,11 @@ const flowchartSchema = new mongoose.Schema({
   title: { type: String, required: true },
   nodes: { type: Array, required: true },
   edges: { type: Array, required: true },
+  status: {
+    type: String,
+    enum: ['saved', 'scheduled', 'completed'],
+    default: 'saved',
+  },
   createdAt: { type: Date, default: Date.now },
 });
 
